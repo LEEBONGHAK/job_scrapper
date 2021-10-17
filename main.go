@@ -5,6 +5,7 @@ import (
 	"log"
 	"net/http"
 	"strconv"
+	"strings"
 
 	"github.com/PuerkitoBio/goquery"
 )
@@ -20,16 +21,20 @@ type extractedJob struct {
 var baseURL string = "https://kr.indeed.com/jobs?q=python"
 
 func main() {
+	var jobs []extractedJob
 	totalPages := getPages()
+
 	for i := 0; i < totalPages; i++ {
-		getPage(i)
+		extractedJobs := getPage(i)
+		jobs = append(jobs, extractedJobs...)
 	}
+	fmt.Println(jobs)
 }
 
-// 각 page에서 정보를 가저오는 함수
-func getPage(page int) {
+// 각 page에서 각 card를 확인하는 함수
+func getPage(page int) []extractedJob {
+	var jobs []extractedJob
 	pageURL := baseURL + "&start=" + strconv.Itoa(page*10)
-	fmt.Println(pageURL)
 	response, err := http.Get(pageURL)
 	checkErr(err)
 	checkCode(response)
@@ -41,17 +46,32 @@ func getPage(page int) {
 
 	searchCards := document.Find(".tapItem ")
 	searchCards.Each(func(i int, card *goquery.Selection) {
-		id, _ := card.Attr("data-jk")
-		fmt.Println(id)
-		title := card.Find(".jobTitle").Text()
-		fmt.Println(title)
-		location := card.Find(".companyLocation").Text()
-		fmt.Println(location)
+		job := extractJob(card)
+		jobs = append(jobs, job)
 	})
+	return jobs
 }
 
-func cleanString(str string) string {
+// card 내 정보를 추출하는 함수
+func extractJob(card *goquery.Selection) extractedJob {
+	id, _ := card.Attr("data-jk")
+	title := cleanString(card.Find(".jobTitle").Text())
+	location := cleanString(card.Find(".companyLocation").Text())
+	salary := cleanString(card.Find(".salary-snippet").Text())
+	summary := cleanString(card.Find(".job-snippet").Text())
 
+	return extractedJob{
+		id:       id,
+		title:    title,
+		location: location,
+		salary:   salary,
+		summary:  summary,
+	}
+}
+
+// string의 앞뒤 공백을 없애고, 모든 공백을 없앤 후 배열로 만들고 strings.Join()으로 재구성
+func cleanString(str string) string {
+	return strings.Join(strings.Fields(strings.TrimSpace(str)), " ")
 }
 
 // page의 개수를 가져오는 함수
