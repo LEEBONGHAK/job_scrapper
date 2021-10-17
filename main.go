@@ -1,9 +1,11 @@
 package main
 
 import (
+	"encoding/csv"
 	"fmt"
 	"log"
 	"net/http"
+	"os"
 	"strconv"
 	"strings"
 
@@ -26,12 +28,36 @@ func main() {
 
 	for i := 0; i < totalPages; i++ {
 		extractedJobs := getPage(i)
+		// 각각의 array을 하나의 array로 만드는 방법 -> not [[x1], [x2], [x3]] but [x1, x2, x3]
 		jobs = append(jobs, extractedJobs...)
 	}
-	fmt.Println(jobs)
+
+	writeJobs(jobs)
+	fmt.Println("Done, extracted", len(jobs))
 }
 
-// 각 page에서 각 card를 확인하는 함수
+// csv 파일에 작성하는 함수
+func writeJobs(jobs []extractedJob) {
+	// csv file 만들기
+	file, err := os.Create("jobs.csv")
+	checkErr(err)
+
+	write := csv.NewWriter(file)
+	// .Flush(): 함수가 끝나는 시점에 파일에 데이터를 입력하는 함수
+	defer write.Flush()
+
+	headers := []string{"ID", "Title", "Location", "Salary", "Summary"}
+	writeErr := write.Write(headers)
+	checkErr(writeErr)
+
+	for _, job := range jobs {
+		jobSlice := []string{"https://kr.indeed.com/viewjob?jk=" + job.id, job.title, job.location, job.salary, job.summary}
+		writeErr = write.Write(jobSlice)
+		checkErr(writeErr)
+	}
+}
+
+// 각 page에서 각 card의 정보를 추출해서 array로 return
 func getPage(page int) []extractedJob {
 	var jobs []extractedJob
 	pageURL := baseURL + "&start=" + strconv.Itoa(page*10)
@@ -44,7 +70,7 @@ func getPage(page int) []extractedJob {
 	document, err := goquery.NewDocumentFromReader(response.Body)
 	checkErr(err)
 
-	searchCards := document.Find(".tapItem ")
+	searchCards := document.Find(".tapItem")
 	searchCards.Each(func(i int, card *goquery.Selection) {
 		job := extractJob(card)
 		jobs = append(jobs, job)
