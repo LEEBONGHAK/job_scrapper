@@ -24,10 +24,15 @@ var baseURL string = "https://kr.indeed.com/jobs?q=python"
 
 func main() {
 	var jobs []extractedJob
+	channel := make(chan []extractedJob)
 	totalPages := getPages()
 
 	for i := 0; i < totalPages; i++ {
-		extractedJobs := getPage(i)
+		go getPage(i, channel)
+	}
+
+	for i := 0; i < totalPages; i++ {
+		extractedJobs := <-channel
 		// 각각의 array을 하나의 array로 만드는 방법 -> not [[x1], [x2], [x3]] but [x1, x2, x3]
 		jobs = append(jobs, extractedJobs...)
 	}
@@ -36,32 +41,12 @@ func main() {
 	fmt.Println("Done, extracted", len(jobs))
 }
 
-// csv 파일에 작성하는 함수
-func writeJobs(jobs []extractedJob) {
-	// csv file 만들기
-	file, err := os.Create("jobs.csv")
-	checkErr(err)
-
-	write := csv.NewWriter(file)
-	// .Flush(): 함수가 끝나는 시점에 파일에 데이터를 입력하는 함수
-	defer write.Flush()
-
-	headers := []string{"Link", "Title", "Location", "Salary", "Summary"}
-	writeErr := write.Write(headers)
-	checkErr(writeErr)
-
-	for _, job := range jobs {
-		jobSlice := []string{"https://kr.indeed.com/viewjob?jk=" + job.id, job.title, job.location, job.salary, job.summary}
-		writeErr = write.Write(jobSlice)
-		checkErr(writeErr)
-	}
-}
-
 // 각 page에서 각 card의 정보를 추출해서 array로 return
-func getPage(page int) []extractedJob {
+func getPage(page int, mainChannel chan<- []extractedJob) {
 	var jobs []extractedJob
 	channel := make(chan extractedJob)
 	pageURL := baseURL + "&start=" + strconv.Itoa(page*10)
+	fmt.Println("Requesting", pageURL)
 	response, err := http.Get(pageURL)
 	checkErr(err)
 	checkCode(response)
@@ -76,23 +61,23 @@ func getPage(page int) []extractedJob {
 		go extractJob(card, channel)
 	})
 
-	for i := 0;i < searchCards.Length(); i++ {
+	for i := 0; i < searchCards.Length(); i++ {
 		job := <-channel
 		jobs = append(jobs, job)
 	}
 
-	return jobs
+	mainChannel <- jobs
 }
 
 // card 내 정보를 추출하는 함수
-func extractJob(card *goquery.Selectionm channel chan <- ex) {
+func extractJob(card *goquery.Selection, channel chan<- extractedJob) {
 	id, _ := card.Attr("data-jk")
 	title := cleanString(card.Find(".jobTitle").Text())
 	location := cleanString(card.Find(".companyLocation").Text())
 	salary := cleanString(card.Find(".salary-snippet").Text())
 	summary := cleanString(card.Find(".job-snippet").Text())
 
-	c <- extractedJob{
+	channel <- extractedJob{
 		id:       id,
 		title:    title,
 		location: location,
@@ -123,6 +108,27 @@ func getPages() int {
 	})
 
 	return pages
+}
+
+// csv 파일에 작성하는 함수
+func writeJobs(jobs []extractedJob) {
+	// csv file 만들기
+	file, err := os.Create("jobs.csv")
+	checkErr(err)
+
+	write := csv.NewWriter(file)
+	// .Flush(): 함수가 끝나는 시점에 파일에 데이터를 입력하는 함수
+	defer write.Flush()
+
+	headers := []string{"Link", "Title", "Location", "Salary", "Summary"}
+	writeErr := write.Write(headers)
+	checkErr(writeErr)
+
+	for _, job := range jobs {
+		jobSlice := []string{"https://kr.indeed.com/viewjob?jk=" + job.id, job.title, job.location, job.salary, job.summary}
+		writeErr = write.Write(jobSlice)
+		checkErr(writeErr)
+	}
 }
 
 // error를 check하는 함수 (error가 발생하면 프로그램 종료)
