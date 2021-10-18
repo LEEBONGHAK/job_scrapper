@@ -1,15 +1,14 @@
 package main
 
 import (
-	"encoding/csv"
 	"fmt"
 	"log"
 	"net/http"
-	"os"
 	"strconv"
 	"strings"
 
 	"github.com/PuerkitoBio/goquery"
+	ccsv "github.com/tsak/concurrent-csv-writer"
 )
 
 type extractedJob struct {
@@ -112,11 +111,13 @@ func getPages() int {
 
 // csv 파일에 작성하는 함수
 func writeJobs(jobs []extractedJob) {
+	fileName := "jobs.csv"
 	// csv file 만들기
-	file, err := os.Create("jobs.csv")
-	checkErr(err)
+	//file, err := os.Create(fileName)
+	//checkErr(err)
 
-	write := csv.NewWriter(file)
+	write, err := ccsv.NewCsvWriter(fileName)
+	checkErr(err)
 	// .Flush(): 함수가 끝나는 시점에 파일에 데이터를 입력하는 함수
 	defer write.Flush()
 
@@ -124,10 +125,19 @@ func writeJobs(jobs []extractedJob) {
 	writeErr := write.Write(headers)
 	checkErr(writeErr)
 
+	done := make(chan bool)
+
 	for _, job := range jobs {
 		jobSlice := []string{"https://kr.indeed.com/viewjob?jk=" + job.id, job.title, job.location, job.salary, job.summary}
-		writeErr = write.Write(jobSlice)
-		checkErr(writeErr)
+		go func(jobSlice []string) {
+			writeErr = write.Write(jobSlice)
+			checkErr(writeErr)
+			done <- true
+		}(jobSlice)
+	}
+
+	for i := 0; i < len(jobs); i++ {
+		<-done
 	}
 }
 
