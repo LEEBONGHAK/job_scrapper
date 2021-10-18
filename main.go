@@ -46,7 +46,7 @@ func writeJobs(jobs []extractedJob) {
 	// .Flush(): 함수가 끝나는 시점에 파일에 데이터를 입력하는 함수
 	defer write.Flush()
 
-	headers := []string{"ID", "Title", "Location", "Salary", "Summary"}
+	headers := []string{"Link", "Title", "Location", "Salary", "Summary"}
 	writeErr := write.Write(headers)
 	checkErr(writeErr)
 
@@ -60,6 +60,7 @@ func writeJobs(jobs []extractedJob) {
 // 각 page에서 각 card의 정보를 추출해서 array로 return
 func getPage(page int) []extractedJob {
 	var jobs []extractedJob
+	channel := make(chan extractedJob)
 	pageURL := baseURL + "&start=" + strconv.Itoa(page*10)
 	response, err := http.Get(pageURL)
 	checkErr(err)
@@ -72,21 +73,26 @@ func getPage(page int) []extractedJob {
 
 	searchCards := document.Find(".tapItem")
 	searchCards.Each(func(i int, card *goquery.Selection) {
-		job := extractJob(card)
-		jobs = append(jobs, job)
+		go extractJob(card, channel)
 	})
+
+	for i := 0;i < searchCards.Length(); i++ {
+		job := <-channel
+		jobs = append(jobs, job)
+	}
+
 	return jobs
 }
 
 // card 내 정보를 추출하는 함수
-func extractJob(card *goquery.Selection) extractedJob {
+func extractJob(card *goquery.Selectionm channel chan <- ex) {
 	id, _ := card.Attr("data-jk")
 	title := cleanString(card.Find(".jobTitle").Text())
 	location := cleanString(card.Find(".companyLocation").Text())
 	salary := cleanString(card.Find(".salary-snippet").Text())
 	summary := cleanString(card.Find(".job-snippet").Text())
 
-	return extractedJob{
+	c <- extractedJob{
 		id:       id,
 		title:    title,
 		location: location,
