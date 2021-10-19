@@ -86,7 +86,7 @@ func extractJob(card *goquery.Selection, channel chan<- extractedJob) {
 }
 
 // string의 앞뒤 공백을 없애고, 모든 공백을 없앤 후 배열로 만들고 strings.Join()으로 재구성
-func cleanString(str string) string {
+func CleanString(str string) string {
 	return strings.Join(strings.Fields(strings.TrimSpace(str)), " ")
 }
 
