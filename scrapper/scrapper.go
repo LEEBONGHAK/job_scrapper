@@ -1,14 +1,15 @@
 package scrapper
 
 import (
+	"encoding/csv"
 	"fmt"
 	"log"
 	"net/http"
+	"os"
 	"strconv"
 	"strings"
 
 	"github.com/PuerkitoBio/goquery"
-	ccsv "github.com/tsak/concurrent-csv-writer"
 )
 
 type extractedJob struct {
@@ -71,10 +72,10 @@ func getPage(page int, url string, mainChannel chan<- []extractedJob) {
 // card 내 정보를 추출하는 함수
 func extractJob(card *goquery.Selection, channel chan<- extractedJob) {
 	id, _ := card.Attr("data-jk")
-	title := cleanString(card.Find(".jobTitle").Text())
-	location := cleanString(card.Find(".companyLocation").Text())
-	salary := cleanString(card.Find(".salary-snippet").Text())
-	summary := cleanString(card.Find(".job-snippet").Text())
+	title := CleanString(card.Find(".jobTitle").Text())
+	location := CleanString(card.Find(".companyLocation").Text())
+	salary := CleanString(card.Find(".salary-snippet").Text())
+	summary := CleanString(card.Find(".job-snippet").Text())
 
 	channel <- extractedJob{
 		id:       id,
@@ -113,16 +114,19 @@ func getPages(url string) int {
 func writeJobs(jobs []extractedJob) {
 	fileName := "jobs.csv"
 	// csv file 만들기
-	//file, err := os.Create(fileName)
-	//checkErr(err)
-
-	write, err := ccsv.NewCsvWriter(fileName)
+	file, err := os.Create(fileName)
 	checkErr(err)
+
+	// utf8로 저장하기 위함
+	utf8bom := []byte{0xEF, 0xBB, 0xBF}
+	file.Write(utf8bom)
+
+	fileWriter := csv.NewWriter(file)
 	// .Flush(): 함수가 끝나는 시점에 파일에 데이터를 입력하는 함수
-	defer write.Flush()
+	defer fileWriter.Flush()
 
 	headers := []string{"Link", "Title", "Location", "Salary", "Summary"}
-	writeErr := write.Write(headers)
+	writeErr := fileWriter.Write(headers)
 	checkErr(writeErr)
 
 	done := make(chan bool)
@@ -130,7 +134,7 @@ func writeJobs(jobs []extractedJob) {
 	for _, job := range jobs {
 		jobSlice := []string{"https://kr.indeed.com/viewjob?jk=" + job.id, job.title, job.location, job.salary, job.summary}
 		go func(jobSlice []string) {
-			writeErr = write.Write(jobSlice)
+			writeErr = fileWriter.Write(jobSlice)
 			checkErr(writeErr)
 			done <- true
 		}(jobSlice)
